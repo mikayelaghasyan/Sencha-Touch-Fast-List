@@ -5,6 +5,7 @@
 	<script src="lib/sencha-touch-1.1.1/sencha-touch-debug-w-comments.js" type="text/javascript"></script>
 	<link href="lib/sencha-touch-1.1.1/resources/css-debug/sencha-touch.css" rel="stylesheet" type="text/css" />
 	<script src="data.js" type="text/javascript"></script>
+	<script src="FastList.js" type="text/javascript"></script>
 	<script type="text/javascript">
 		Ext.regModel('Contact', {
 			fields: ['firstName', 'lastName']
@@ -29,8 +30,8 @@
 					],
 					layout: 'fit',
 					items: [
-						new Ext.List({
-							itemTpl: '{firstName} <strong>{lastName}</strong>',
+						new Ext.ux.FastList({
+							itemTpl: '{firstName} {lastName}',
 							grouped: true,
 							indexBar: true,
 							store: 'Contacts'
