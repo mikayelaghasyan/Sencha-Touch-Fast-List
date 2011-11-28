@@ -21,22 +21,91 @@
 			}
 		});
 
+		var contactList = new Ext.ux.FastList({
+			itemTpl: '{firstName} {lastName}',
+			grouped: true,
+			indexBar: true,
+			store: 'Contacts',
+			listeners: {
+				'selectionchange': function(selModel, records) {
+					editBtn.setDisabled(records.length == 0);
+				}
+			}
+		});
+
+		var firstNameField = new Ext.form.Text({
+			label: 'First Name'
+		});
+		var lastNameField = new Ext.form.Text({
+			label: 'Last Name'
+		});
+		var editPnl = new Ext.Panel({
+			floating: true,
+			centered: true,
+			modal: true,
+			width: 500,
+
+			dockedItems: [{
+				dock: 'top',
+				xtype: 'toolbar',
+				title: 'Editing Item'
+			}, {
+				dock: 'bottom',
+				xtype: 'toolbar',
+				items: [{
+					text: 'Cancel',
+					handler: function() {
+						editPnl.hide();
+					}
+				}, {
+					xtype: 'spacer'
+				}, {
+					text: 'Change',
+					ui: 'action',
+					handler: function() {
+						var record = contactList.getSelectedRecords()[0];
+						record.set('firstName', firstNameField.getValue());
+						record.set('lastName', lastNameField.getValue());
+
+						// Workaround: selection *should* be maintained.
+						// activeList.getSelectionModel().select(record);
+
+						editPnl.hide();
+					}
+				}]
+			}],
+			items: [{
+				xtype: 'form',
+				items: [{
+					xtype: 'fieldset',
+					items: [firstNameField, lastNameField]
+				}]
+			}]
+		});
+
+		var editBtn = new Ext.Button({
+			text: 'Edit',
+			disabled: true,
+			handler: function() {
+				editPnl.show();
+
+				var record = contactList.getSelectedRecords()[0];
+				firstNameField.setValue(record.get('firstName'));
+				lastNameField.setValue(record.get('lastName'));
+			}
+		});
+
 		new Ext.Application({
 			launch: function() {
 				new Ext.Panel({
 					fullscreen: true,
-					dockedItems: [
-						{xtype: 'toolbar', title: 'Contacts'}
-					],
+					dockedItems: [{
+						xtype: 'toolbar',
+						title: 'Contacts',
+						items: [{xtype: 'spacer'}, editBtn]
+					}],
 					layout: 'fit',
-					items: [
-						new Ext.ux.FastList({
-							itemTpl: '{firstName} {lastName}',
-							grouped: true,
-							indexBar: true,
-							store: 'Contacts'
-						})
-					]
+					items: [contactList]
 				});
 			}
 		});
