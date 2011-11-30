@@ -8,8 +8,8 @@
 Ext.namespace('Ext.ux');
 
 Ext.ux.FastList = Ext.extend(Ext.List, {
-	minimumInvisibleItems: 5,
-	maximumInvisibleItems: 20,
+	minimumInvisibleItems: 1,
+	maximumInvisibleItems: 5,
 
 	initComponent: function() {
 		Ext.ux.FastList.superclass.initComponent.call(this);
@@ -47,6 +47,9 @@ Ext.ux.FastList = Ext.extend(Ext.List, {
 		this.bottomProxy = this.getTargetEl().down('.ux-list-bottom-proxy');
 		this.listContainer = this.getTargetEl().down('.ux-list-container');
 
+		this.firstRenderedIndex = -1;
+		this.lastRenderedIndex = -1;
+
 		this.initGroupInfo();
 		this.onScroll(this.scroller, this.scroller.getOffset());
 	},
@@ -55,6 +58,22 @@ Ext.ux.FastList = Ext.extend(Ext.List, {
 		if (this.listItemHeight === undefined) {
 			this.initHeights();
 		}
+
+		var startIndex = this.getItemIndexAtY(pos.y);
+		var endIndex = this.getItemIndexAtY(pos.y + this.getHeight());
+		if (this.firstRenderedIndex <= startIndex - this.minimumInvisibleItems &&
+				this.lastRenderedIndex >= endIndex + this.minimumInvisibleItems) {
+			return;
+		}
+		this.firstRenderedIndex = Math.max(startIndex - this.maximumInvisibleItems, 0);
+		this.lastRenderedIndex = Math.min(endIndex + this.maximumInvisibleItems, this.store.getCount() - 1);
+
+		var data = this.getDataForRange(this.firstRenderedIndex, this.lastRenderedIndex);
+		var tpl = this.grouped ? this.groupTpl : this.listItemTpl;
+		tpl.overwrite(this.listContainer, data);
+
+		this.topProxy.setHeight(this.getHeightBeforeIndex(this.firstRenderedIndex));
+		this.bottomProxy.setHeight(this.getHeightAfterIndex(this.lastRenderedIndex));
 	},
 
 	initHeights: function() {
@@ -95,21 +114,117 @@ Ext.ux.FastList = Ext.extend(Ext.List, {
 		if (this.grouped) {
 			var store = this.store, storeCount = store.getCount();
 			if (storeCount > 0) {
-				var i, key;
+				var i, key, groupName;
 				var currentGroupInfo;
 				for (i = 0; i < storeCount; i++) {
-					key = store.getGroupString(store.getAt(i)).toLowerCase();
+					groupName = store.getGroupString(store.getAt(i));
+					key = groupName.toLowerCase();
 					if (currentGroupInfo === undefined) {
-						currentGroupInfo = {key: key, startIndex: i};
+						currentGroupInfo = {key: key, name: groupName, startIndex: i};
 					} else if (key !== currentGroupInfo['key']) {
 						currentGroupInfo['count'] = i - currentGroupInfo['startIndex'];
 						this.groupInfo[this.groupInfo.length] = currentGroupInfo;
-						currentGroupInfo = {key: key, startIndex: i};
+						currentGroupInfo = {key: key, name: groupName, startIndex: i};
 					}
 				}
 				currentGroupInfo['count'] = i - currentGroupInfo['startIndex'];
 				this.groupInfo[this.groupInfo.length] = currentGroupInfo;
 			}
 		}
+	},
+
+	getItemIndexAtY: function(y) {
+		var currentY = 0;
+		if (this.grouped) {
+			var group;
+			for (var i = 0; i < this.groupInfo.length; i++) {
+				group = this.groupInfo[i];
+				if (currentY + this.listHeaderHeight + this.listItemHeight * group['count'] <= y) {
+					currentY += this.listHeaderHeight + this.listItemHeight * group['count'];
+				} else {
+					return (group['startIndex'] + Math.floor(Math.max(y - currentY - this.listHeaderHeight, 0) / this.listItemHeight));
+				}
+			}
+			if (group !== undefined) {
+				return (group['startIndex'] + group['count'] - 1);
+			}
+		} else {
+			var storeCount = this.store.getCount();
+			return Math.min(Math.floor(y / this.listItemHeight), storeCount - 1);
+		}
+		return -1;
+	},
+
+	getDataForRange: function(startIndex, endIndex) {
+		var data;
+		var i;
+		if (this.grouped) {
+			data = [];
+			for (i = 0; i < this.groupInfo.length; i++) {
+				var group = this.groupInfo[i];
+				if (group['startIndex'] + group['count'] <= startIndex) {
+					continue;
+				}
+				if (group['startIndex'] > endIndex) {
+					break;
+				}
+				data[data.length] = {
+					id: group['key'],
+					group: group['name'],
+					items: this.listItemTpl.apply(
+							this.getItemsForRange(Math.max(startIndex, group['startIndex']),
+									Math.min(endIndex, group['startIndex'] + group['count'] - 1)))
+				};
+			}
+		} else {
+			data = this.getItemsForRange(startIndex, endIndex);
+		}
+		return data;
+	},
+
+	getItemsForRange: function(startIndex, endIndex) {
+		var items = [];
+		for (i = startIndex; i <= endIndex; i++) {
+			items[items.length] = this.store.getAt(i).data;
+		}
+		return items;
+	},
+
+	getHeightBeforeIndex: function(index) {
+		var height = 0;
+		if (this.grouped) {
+			var i;
+			for (i = 0; i < this.groupInfo.length; i++) {
+				var group = this.groupInfo[i];
+				if (group['startIndex'] + group['count'] <= index) {
+					height += this.listHeaderHeight + this.listItemHeight * group['count'];
+				} else {
+					height += this.listItemHeight * (index - group['startIndex']);
+					break;
+				}
+			}
+		} else {
+			height = this.listItemHeight * index;
+		}
+		return height;
+	},
+
+	getHeightAfterIndex: function(index) {
+		var height = 0;
+		if (this.grouped) {
+			var i;
+			for (i = this.groupInfo.length - 1; i >= 0 ; i--) {
+				var group = this.groupInfo[i];
+				if (group['startIndex'] > index) {
+					height += this.listHeaderHeight + this.listItemHeight * group['count'];
+				} else {
+					height += this.listItemHeight * (group['startIndex'] + group['count'] - index - 1);
+					break;
+				}
+			}
+		} else {
+			height = this.listItemHeight * (this.store.getCount() - index - 1);
+		}
+		return height;
 	}
 });
