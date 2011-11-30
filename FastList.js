@@ -51,22 +51,28 @@ Ext.ux.FastList = Ext.extend(Ext.List, {
 		this.lastRenderedIndex = -1;
 
 		this.initGroupInfo();
-		this.onScroll(this.scroller, this.scroller.getOffset());
+		var _this = this;
+		Ext.defer(function() {
+			_this.onScroll(_this.scroller, _this.scroller.getOffset());
+		}, 100);
 	},
 
 	onScroll : function(scroller, pos, options) {
+		var startTime = new Date();
+
 		if (this.listItemHeight === undefined) {
 			this.initHeights();
 		}
 
+		var storeCount = this.store.getCount();
 		var startIndex = this.getItemIndexAtY(pos.y);
 		var endIndex = this.getItemIndexAtY(pos.y + this.getHeight());
-		if (this.firstRenderedIndex <= startIndex - this.minimumInvisibleItems &&
-				this.lastRenderedIndex >= endIndex + this.minimumInvisibleItems) {
+		if (this.firstRenderedIndex <= Math.max(startIndex - this.minimumInvisibleItems, 0) &&
+				this.lastRenderedIndex >= Math.min(endIndex + this.minimumInvisibleItems, storeCount - 1)) {
 			return;
 		}
 		this.firstRenderedIndex = Math.max(startIndex - this.maximumInvisibleItems, 0);
-		this.lastRenderedIndex = Math.min(endIndex + this.maximumInvisibleItems, this.store.getCount() - 1);
+		this.lastRenderedIndex = Math.min(endIndex + this.maximumInvisibleItems, storeCount - 1);
 
 		var data = this.getDataForRange(this.firstRenderedIndex, this.lastRenderedIndex);
 		var tpl = this.grouped ? this.groupTpl : this.listItemTpl;
@@ -74,6 +80,9 @@ Ext.ux.FastList = Ext.extend(Ext.List, {
 
 		this.topProxy.setHeight(this.getHeightBeforeIndex(this.firstRenderedIndex));
 		this.bottomProxy.setHeight(this.getHeightAfterIndex(this.lastRenderedIndex));
+
+		var endTime = new Date();
+		console.log("onScroll took " + (endTime.getTime() - startTime.getTime()) + " milliseconds");
 	},
 
 	initHeights: function() {
