@@ -151,8 +151,6 @@ Ext.ux.FastList = Ext.extend(Ext.List, {
 			return;
 		}
 
-		var startTime = new Date();
-
 		if (this.listItemHeight === undefined) {
 			this.initHeights();
 		}
@@ -180,8 +178,6 @@ Ext.ux.FastList = Ext.extend(Ext.List, {
 		this.topProxy.setHeight(this.getHeightBeforeIndex(this.firstRenderedIndex));
 		this.bottomProxy.setHeight(this.getHeightAfterIndex(this.lastRenderedIndex));
 		this.isUpdating = false;
-
-		var endTime = new Date();
 	},
 
 	// @private
