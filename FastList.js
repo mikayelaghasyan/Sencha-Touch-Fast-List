@@ -9,7 +9,7 @@ Ext.namespace('Ext.ux');
 
 Ext.ux.FastList = Ext.extend(Ext.List, {
 	minimumInvisibleItems: 1,
-	maximumInvisibleItems: 5,
+	maximumInvisibleItems: 20,
 
 	initComponent: function() {
 		Ext.ux.FastList.superclass.initComponent.call(this);
@@ -25,64 +25,24 @@ Ext.ux.FastList = Ext.extend(Ext.List, {
 				'<div class="{id}"></div>',
 			'</tpl>'
 		]);
+
+		this.groupHeaderTpl = new Ext.XTemplate([
+			'<h3 class="x-list-header">{group}</h3>'
+		]);
+
+		this.isUpdating = false;
 	},
 
-	// don't handle all records, but only return three: top proxy, container, bottom proxy
-	// actual content will be rendered to the container element in the scroll event handler
-	collectData: function(records, startIndex) {
-		return [{
-			id: 'ux-list-top-proxy'
-		}, {
-			id: 'ux-list-container'
-		}, {
-			id: 'ux-list-bottom-proxy'
-		}];
-	},
-
-	refresh: function() {
-		Ext.ux.FastList.superclass.refresh.call(this);
-
-		// locate our proxy and list container nodes
-		this.topProxy = this.getTargetEl().down('.ux-list-top-proxy');
-		this.bottomProxy = this.getTargetEl().down('.ux-list-bottom-proxy');
-		this.listContainer = this.getTargetEl().down('.ux-list-container');
-
-		this.firstRenderedIndex = -1;
-		this.lastRenderedIndex = -1;
-
-		this.initGroupInfo();
-		var _this = this;
-		Ext.defer(function() {
-			_this.onScroll(_this.scroller, _this.scroller.getOffset());
-		}, 100);
-	},
-
-	onScroll : function(scroller, pos, options) {
-		var startTime = new Date();
-
-		if (this.listItemHeight === undefined) {
-			this.initHeights();
-		}
-
-		var storeCount = this.store.getCount();
-		var startIndex = this.getItemIndexAtY(pos.y);
-		var endIndex = this.getItemIndexAtY(pos.y + this.getHeight());
-		if (this.firstRenderedIndex <= Math.max(startIndex - this.minimumInvisibleItems, 0) &&
-				this.lastRenderedIndex >= Math.min(endIndex + this.minimumInvisibleItems, storeCount - 1)) {
-			return;
-		}
-		this.firstRenderedIndex = Math.max(startIndex - this.maximumInvisibleItems, 0);
-		this.lastRenderedIndex = Math.min(endIndex + this.maximumInvisibleItems, storeCount - 1);
-
-		var data = this.getDataForRange(this.firstRenderedIndex, this.lastRenderedIndex);
-		var tpl = this.grouped ? this.groupTpl : this.listItemTpl;
-		tpl.overwrite(this.listContainer, data);
-
-		this.topProxy.setHeight(this.getHeightBeforeIndex(this.firstRenderedIndex));
-		this.bottomProxy.setHeight(this.getHeightAfterIndex(this.lastRenderedIndex));
-
-		var endTime = new Date();
-		console.log("onScroll took " + (endTime.getTime() - startTime.getTime()) + " milliseconds");
+	// @private
+	initEvents : function() {
+		Ext.ux.FastList.superclass.initEvents.call(this);
+		// Remove listeners added by base class, these are all overridden
+		// in this implementation.
+		this.mun(this.scroller, {
+			scrollstart: this.onScrollStart,
+			scroll: this.onScroll,
+			scope: this
+		});
 	},
 
 	initHeights: function() {
@@ -113,6 +73,9 @@ Ext.ux.FastList = Ext.extend(Ext.List, {
 				this.listHeaderHeight = headers[0].offsetHeight;
 			}
 			tpl.overwrite(this.listContainer, []);
+			this.header.show();
+			this.header.dom.innerHTML = store.getGroupString(firstRecord);
+			this.header.hide();
 			console.log("List item height is: ", this.listItemHeight);
 			console.log("List header height is: ", this.listHeaderHeight);
 		}
@@ -140,6 +103,127 @@ Ext.ux.FastList = Ext.extend(Ext.List, {
 				this.groupInfo[this.groupInfo.length] = currentGroupInfo;
 			}
 		}
+	},
+
+	// @private - override
+	afterRender: function() {
+		Ext.ux.FastList.superclass.afterRender.apply(this, arguments);
+
+		// set up listeners which will trigger rendering/cleanup of our sliding window of items
+		this.mon(this.scroller, {
+			scroll: this.renderOnScroll,
+//			scrollend: this.onScrollStop,
+			scope: this
+		});
+
+	},
+
+	// don't handle all records, but only return three: top proxy, container, bottom proxy
+	// actual content will be rendered to the container element in the scroll event handler
+	collectData: function(records, startIndex) {
+		return [{
+			id: 'ux-list-top-proxy'
+		}, {
+			id: 'ux-list-container'
+		}, {
+			id: 'ux-list-bottom-proxy'
+		}];
+	},
+
+	refresh: function() {
+		Ext.ux.FastList.superclass.refresh.call(this);
+
+		// locate our proxy and list container nodes
+		this.topProxy = this.getTargetEl().down('.ux-list-top-proxy');
+		this.bottomProxy = this.getTargetEl().down('.ux-list-bottom-proxy');
+		this.listContainer = this.getTargetEl().down('.ux-list-container');
+
+		this.firstRenderedIndex = -1;
+		this.lastRenderedIndex = -1;
+
+		this.initGroupInfo();
+		var _this = this;
+		Ext.defer(function() {
+			_this.renderOnScroll(_this.scroller, _this.scroller.getOffset());
+		}, 100);
+	},
+
+	renderOnScroll : function(scroller, pos, options) {
+		if (this.isUpdating) {
+			return;
+		}
+
+		var startTime = new Date();
+
+		if (this.listItemHeight === undefined) {
+			this.initHeights();
+		}
+
+		if (this.grouped) {
+			this.updateGroupHeader(pos.y);
+		}
+
+		var storeCount = this.store.getCount();
+		var startIndex = this.getItemIndexAtY(pos.y);
+		var endIndex = this.getItemIndexAtY(pos.y + this.getHeight());
+		if (this.firstRenderedIndex <= Math.max(startIndex - this.minimumInvisibleItems, 0) &&
+				this.lastRenderedIndex >= Math.min(endIndex + this.minimumInvisibleItems, storeCount - 1)) {
+			return;
+		}
+		this.firstRenderedIndex = Math.max(startIndex - this.maximumInvisibleItems, 0);
+		this.lastRenderedIndex = Math.min(endIndex + this.maximumInvisibleItems, storeCount - 1);
+
+		var data = this.getDataForRange(this.firstRenderedIndex, this.lastRenderedIndex);
+		var tpl = this.grouped ? this.groupTpl : this.listItemTpl;
+
+		this.isUpdating = true;
+//		tpl.overwrite(this.listContainer, data);
+		this.listContainer.update(tpl.applyTemplate(data));
+		this.topProxy.setHeight(this.getHeightBeforeIndex(this.firstRenderedIndex));
+		this.bottomProxy.setHeight(this.getHeightAfterIndex(this.lastRenderedIndex));
+		this.isUpdating = false;
+
+		var endTime = new Date();
+		console.log("onScroll took " + (endTime.getTime() - startTime.getTime()) + " milliseconds");
+	},
+
+	updateGroupHeader: function(y) {
+		var group = this.getGroupNameAndNextOffsetAtY(y);
+		if (group == null) {
+			this.header.hide();
+		} else {
+			this.header.show();
+			this.header.dom.innerHTML = group['name'];
+			if (group['nextOffset'] - y <= this.listHeaderHeight) {
+				var transform = this.listHeaderHeight- (group['nextOffset'] - y);
+				Ext.Element.cssTranslate(this.header, {x: 0, y: -transform});
+				this.transformed = true;
+			} else if (this.transformed) {
+				this.header.setStyle('-webkit-transform', null);
+				this.transformed = false;
+			}
+		}
+	},
+
+	getGroupNameAndNextOffsetAtY: function(y) {
+		if (this.grouped) {
+			var currentY = 0;
+			var group;
+			for (var i = 0; i < this.groupInfo.length; i++) {
+				group = this.groupInfo[i];
+				if (currentY > y) {
+					break;
+				} else {
+					currentY += this.listHeaderHeight + this.listItemHeight * group['count'];
+					if (currentY <= y) {
+						continue;
+					} else {
+						return {name: group['name'], nextOffset: currentY};
+					}
+				}
+			}
+		}
+		return null;
 	},
 
 	getItemIndexAtY: function(y) {
