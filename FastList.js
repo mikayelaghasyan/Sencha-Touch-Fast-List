@@ -76,8 +76,6 @@ Ext.ux.FastList = Ext.extend(Ext.List, {
 			this.header.show();
 			this.header.dom.innerHTML = store.getGroupString(firstRecord);
 			this.header.hide();
-			console.log("List item height is: ", this.listItemHeight);
-			console.log("List header height is: ", this.listHeaderHeight);
 		}
 	},
 
@@ -184,7 +182,22 @@ Ext.ux.FastList = Ext.extend(Ext.List, {
 		this.isUpdating = false;
 
 		var endTime = new Date();
-		console.log("onScroll took " + (endTime.getTime() - startTime.getTime()) + " milliseconds");
+	},
+
+	// @private
+	onIndex : function(record, target, index) {
+		var key = record.data['key'];
+		var currentY = 0;
+		for (var i = 0; i < this.groupInfo.length; i++) {
+			var group = this.groupInfo[i];
+			if (group['key'] < key) {
+				currentY += this.listHeaderHeight + this.listItemHeight * group['count'];
+			} else {
+				break;
+			}
+		}
+		this.scroller.updateBoundary();
+		this.scroller.scrollTo({x: 0, y: currentY}, false);
 	},
 
 	updateGroupHeader: function(y) {
