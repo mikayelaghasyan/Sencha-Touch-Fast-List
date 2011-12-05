@@ -83,9 +83,9 @@ Ext.ux.FastList = Ext.extend(Ext.List, {
 		this.groupInfo = [];
 		if (this.grouped) {
 			var store = this.store, storeCount = store.getCount();
+			var i, j, key, groupName;
+			var currentGroupInfo;
 			if (storeCount > 0) {
-				var i, key, groupName;
-				var currentGroupInfo;
 				for (i = 0; i < storeCount; i++) {
 					groupName = store.getGroupString(store.getAt(i));
 					key = groupName.toLowerCase();
@@ -99,6 +99,20 @@ Ext.ux.FastList = Ext.extend(Ext.List, {
 				}
 				currentGroupInfo['count'] = i - currentGroupInfo['startIndex'];
 				this.groupInfo[this.groupInfo.length] = currentGroupInfo;
+			}
+
+			if (!!this.indexBar) {
+				store = this.indexBar.store, storeCount = store.getCount();
+				for (i = 0; i < storeCount; i++) {
+					var indexKey = store.getAt(i).get('key').toLowerCase();
+					for (j = 0; j < this.groupInfo.length; j++) {
+						var group = this.groupInfo[j];
+						if (group['key'] === indexKey) {
+							group['index'] = i;
+							break;
+						}
+					}
+				}
 			}
 		}
 	},
@@ -186,7 +200,7 @@ Ext.ux.FastList = Ext.extend(Ext.List, {
 		var currentY = 0;
 		for (var i = 0; i < this.groupInfo.length; i++) {
 			var group = this.groupInfo[i];
-			if (group['key'] < key) {
+			if (group['index'] < index) {
 				currentY += this.listHeaderHeight + this.listItemHeight * group['count'];
 			} else {
 				break;
