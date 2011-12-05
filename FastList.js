@@ -196,11 +196,11 @@ Ext.ux.FastList = Ext.extend(Ext.List, {
 
 	// @private
 	onIndex : function(record, target, index) {
-		var key = record.data['key'];
 		var currentY = 0;
 		for (var i = 0; i < this.groupInfo.length; i++) {
 			var group = this.groupInfo[i];
-			if (group['index'] < index) {
+			var nextGroup = (i < this.groupInfo.length - 1 ? this.groupInfo[i + 1] : null);
+			if (nextGroup !== null && nextGroup['index'] <= index) {
 				currentY += this.listHeaderHeight + this.listItemHeight * group['count'];
 			} else {
 				break;
